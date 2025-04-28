@@ -1,0 +1,101 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import random
+import copy
+from numba import jit,njit
+from numba_progress import ProgressBar
+
+MAX_IT = 100_000
+
+def read_file(filename):
+    graph=[]
+
+    with open(filename,"r") as file:
+        for line in file:
+            graph.append([int(x) for x in line.split()])
+    graph=np.array(graph)
+    return graph
+
+def draw(graph):
+    plt.plot(graph[:,0],graph[:,1],'-o',c='red')
+    plt.show()
+
+
+@njit
+def randomize_edges(graph):
+    new_graph=[v for v in graph]
+    while True:
+        indexes = np.random.randint(low=0,high=len(graph),size=4)
+        flag = True
+        for i in range(len(indexes)):
+            j = i+1
+            while j<range(len(indexes)):
+                if indexes[i] == indexes[j] +1 or indexes[i] == indexes[j] - 1:  
+                    flag = False
+
+        if flag:
+            break
+
+    temp=new_graph[indexes[1]]
+    new_graph[[indexes[1]]]=new_graph[[indexes[2]]]
+    new_graph[[indexes[2]]] =temp
+
+'''
+@njit
+def randomize_edges(graph):
+    #new_graph = copy.deepcopy(graph)
+    #my deepcopy
+    new_graph=[v for v in graph]
+    edge_1 = [random.choice(new_graph) for _ in range(2)]
+    while True:
+        edge_2 = [random.choice(new_graph) for _ in range(2)]
+        for v1 in edge_1:
+            is_present = np.any([np.array_equal(v2,v1) for v2 in edge_2])
+        if not is_present:
+            break
+    
+    indexes = []
+    for idx,v in enumerate(new_graph):
+        if np.array_equal(v,edge_1[1]) or np.array_equal(v,edge_2[0]):
+            indexes.append(idx)
+    
+    temp=new_graph[indexes[0]]
+    new_graph[[indexes[0]]]=new_graph[[indexes[1]]]
+    new_graph[[indexes[1]]] =temp
+
+    return new_graph
+'''
+@jit
+def calcluate_length(graph):
+    s=0
+    vector_length=lambda v1,v2: ((v2[0] - v1[0])**2 + (v2[1] - v1[1])**2)**0.5  
+    for idx in range(len(graph) - 1):
+        s+=vector_length(graph[idx],graph[idx+1])
+
+    return s
+
+@njit(nogil=True)
+def simulated_annealing(graph,progress_proxy):
+    for i in range(100,1):
+        T = 0.001 * i**2
+        for it in range(MAX_IT):
+            new_graph = randomize_edges(graph)
+            d_new = calcluate_length(new_graph)
+            d =  calcluate_length(graph)
+            if  d_new < d:
+                graph=new_graph
+            else:
+                r = np.random.rand()
+                if r < np.exp(-(d_new -d)/T):
+                    graph = new_graph
+
+        progress_proxy.update(1)
+    return graph
+
+
+
+if __name__ == "__main__":
+    graph=read_file('data.csv')
+    with ProgressBar(total=100) as progress:
+        graph=simulated_annealing(graph,progress)
+    draw(graph)
